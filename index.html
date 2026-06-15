@@ -14,8 +14,9 @@
   <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    
+    import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
     // ⚠️ SUBSTITUA PELAS SUAS CREDENCIAIS DO FIREBASE
     const firebaseConfig = {
       apiKey: "AIzaSyCfjbtIkWtt8KwWyTH2-PbKBaJsmA3ecSA",
@@ -25,9 +26,10 @@
       messagingSenderId: "300013562215",
       appId: "1:300013562215:web:8b8b74dcf40c08999c67c2"
     };
-    
+
     window.firebaseApp = initializeApp(firebaseConfig);
     window.firebaseAuth = getAuth(window.firebaseApp);
+    window.firebaseDB   = getFirestore(window.firebaseApp);
   </script>
 
   <link rel="stylesheet" href="style.css" />
@@ -40,7 +42,7 @@
       <div class="login-icon">🔐</div>
       <h2>HorasExtra<em>360</em></h2>
       <p class="login-sub">Faça login para acessar o painel gerencial</p>
-      
+
       <form id="loginForm" class="login-form" onsubmit="return false;">
         <div class="form-group">
           <label for="loginEmail">E-mail</label>
@@ -54,7 +56,7 @@
         <button type="submit" class="btn-login" id="btnLogin">Entrar</button>
         <button type="button" class="btn-register" id="btnRegister">Criar conta</button>
       </form>
-      
+
       <p class="login-hint">Use seu e-mail corporativo para acesso.</p>
     </div>
   </section>
@@ -103,6 +105,11 @@
         <p>Faça o upload da planilha Excel com os dados de horas extras para começar.</p>
         <label class="upload-btn-lg" for="fileInput">Selecionar arquivo .xlsx</label>
         <p class="landing-hint">A planilha deve conter abas por data (ex.: 09-06, 10-06…)</p>
+        <div class="landing-actions" style="margin-top:1rem;display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;">
+          <button class="btn-save-cloud" id="btnSaveCloud" style="display:none">☁️ Salvar dados na nuvem</button>
+          <button class="btn-load-cloud" id="btnLoadCloud" style="display:none">🔄 Carregar dados salvos</button>
+        </div>
+        <p id="cloudStatus" class="landing-hint" style="margin-top:.5rem;color:var(--green);"></p>
       </div>
     </section>
 

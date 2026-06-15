@@ -1,6 +1,6 @@
 /**
  * HorasExtra360 · app.js
- * Dashboard Interativo de Horas Extras + Firebase Auth
+ * Dashboard Interativo de Horas Extras + Firebase Auth + Firestore
  * ─────────────────────────────────────────────────────────────
  */
 
@@ -10,6 +10,13 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+import {
+  doc,
+  setDoc,
+  getDoc,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* ═══════════════════════════════════════════════════════════
    ESTADO GLOBAL
@@ -23,26 +30,99 @@ let tableSortCol = null;
 let tableSortAsc = true;
 let tablePage    = 1;
 const PAGE_SIZE  = 25;
+let currentUser  = null;
+
+/* ═══════════════════════════════════════════════════════════
+   FIREBASE
+═══════════════════════════════════════════════════════════ */
+const auth = window.firebaseAuth;
+const db   = window.firebaseDB;
+
+/* ═══════════════════════════════════════════════════════════
+   FIRESTORE: SALVAR & CARREGAR
+═══════════════════════════════════════════════════════════ */
+async function saveToFirestore() {
+  if (!currentUser || !allData.length) return;
+  try {
+    showLoading(true);
+    const ref = doc(db, 'users', currentUser.uid, 'dashboard', 'ultimo');
+    await setDoc(ref, {
+      records: allData,
+      updatedAt: serverTimestamp(),
+      userEmail: currentUser.email,
+      totalRecords: allData.length
+    });
+    showCloudStatus('☁️ Dados salvos na nuvem com sucesso!', 'green');
+  } catch (err) {
+    console.error('Erro ao salvar no Firestore:', err);
+    showCloudStatus('⚠️ Erro ao salvar: ' + err.message, 'red');
+  } finally {
+    showLoading(false);
+  }
+}
+
+async function loadFromFirestore() {
+  if (!currentUser) return false;
+  try {
+    showLoading(true);
+    const ref = doc(db, 'users', currentUser.uid, 'dashboard', 'ultimo');
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const payload = snap.data();
+      if (payload.records && payload.records.length) {
+        allData = payload.records;
+        initDashboard();
+        showCloudStatus('☁️ Dados carregados da nuvem (' + payload.records.length + ' registros)', 'green');
+        return true;
+      }
+    }
+    return false;
+  } catch (err) {
+    console.error('Erro ao carregar do Firestore:', err);
+    showCloudStatus('⚠️ Erro ao carregar: ' + err.message, 'red');
+    return false;
+  } finally {
+    showLoading(false);
+  }
+}
+
+function showCloudStatus(msg, color) {
+  const el = document.getElementById('cloudStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = color === 'red' ? 'var(--red)' : 'var(--green)';
+  setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 5000);
+}
+
+function updateCloudButtons() {
+  const btnSave = document.getElementById('btnSaveCloud');
+  const btnLoad = document.getElementById('btnLoadCloud');
+  if (btnSave) btnSave.style.display = currentUser ? 'inline-block' : 'none';
+  if (btnLoad) btnLoad.style.display = currentUser ? 'inline-block' : 'none';
+}
 
 /* ═══════════════════════════════════════════════════════════
    FIREBASE AUTH
 ═══════════════════════════════════════════════════════════ */
-const auth = window.firebaseAuth;
-
 function initAuth() {
   const loginScreen = document.getElementById('loginScreen');
   const appShell    = document.getElementById('appShell');
   const userEmail   = document.getElementById('userEmail');
   const loginError  = document.getElementById('loginError');
 
-  // Observa estado de autenticação
   onAuthStateChanged(auth, user => {
+    currentUser = user;
+    updateCloudButtons();
     if (user) {
       loginScreen.style.display = 'none';
       appShell.style.display = 'block';
       userEmail.textContent = user.email;
-      // Tenta auto-load do Excel se ainda não carregou
-      if (!allData.length) autoLoad();
+      // Tenta carregar do Firestore primeiro; se não houver, tenta auto-load local
+      if (!allData.length) {
+        loadFromFirestore().then(loaded => {
+          if (!loaded) autoLoad();
+        });
+      }
     } else {
       loginScreen.style.display = 'flex';
       appShell.style.display = 'none';
@@ -98,6 +178,12 @@ function initAuth() {
     Object.values(charts).forEach(c => c.destroy && c.destroy());
     for (const k in charts) delete charts[k];
   });
+
+  // Botões nuvem
+  const btnSave = document.getElementById('btnSaveCloud');
+  const btnLoad = document.getElementById('btnLoadCloud');
+  if (btnSave) btnSave.addEventListener('click', saveToFirestore);
+  if (btnLoad) btnLoad.addEventListener('click', loadFromFirestore);
 }
 
 function mapAuthError(code) {
@@ -220,6 +306,8 @@ document.getElementById('fileInput').addEventListener('change', e => {
         return;
       }
       initDashboard();
+      // Auto-salva no Firestore se usuário estiver logado
+      if (currentUser) saveToFirestore();
     } catch (err) {
       alert('Erro ao ler planilha: ' + err.message);
       console.error(err);
@@ -843,7 +931,10 @@ async function autoLoad() {
     const buf = await resp.arrayBuffer();
     const wb = XLSX.read(buf, { type: 'array', cellText: true });
     allData = parseWorkbook(wb);
-    if (allData.length) initDashboard();
+    if (allData.length) {
+      initDashboard();
+      if (currentUser) saveToFirestore();
+    }
   } catch (e) {
     // silently ignore
   } finally {

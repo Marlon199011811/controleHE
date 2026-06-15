@@ -201,6 +201,22 @@ body {
 }
 .upload-btn:hover { background: var(--blue-glow); }
 
+/* ─── CLOUD BUTTONS ──────────────────────────────────────── */
+.btn-save-cloud, .btn-load-cloud {
+  background: var(--navy-line);
+  border: 1px solid var(--navy-line);
+  color: var(--text-hi);
+  padding: .45rem 1rem;
+  border-radius: 8px;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.btn-save-cloud:hover { background: var(--green); border-color: var(--green); }
+.btn-load-cloud:hover { background: var(--blue); border-color: var(--blue); }
+
 /* ─── FILTER BAR ─────────────────────────────────────────── */
 .filter-bar {
   background: var(--navy-mid);
