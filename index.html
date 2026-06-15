@@ -11,205 +11,256 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    
+    // ⚠️ SUBSTITUA PELAS SUAS CREDENCIAIS DO FIREBASE
+    const firebaseConfig = {
+      apiKey: "AIzaSyCfjbtIkWtt8KwWyTH2-PbKBaJsmA3ecSA",
+      authDomain: "controlehe-19702.firebaseapp.com",
+      projectId: "controlehe-19702",
+      storageBucket: "controlehe-19702.firebasestorage.app",
+      messagingSenderId: "300013562215",
+      appId: "1:300013562215:web:8b8b74dcf40c08999c67c2"
+    };
+    
+    window.firebaseApp = initializeApp(firebaseConfig);
+    window.firebaseAuth = getAuth(window.firebaseApp);
+  </script>
+
   <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
-  <!-- ─── HEADER ─────────────────────────────────────────────────── -->
-  <header class="site-header">
-    <div class="header-inner">
-      <div class="brand">
-        <span class="brand-icon">⏱</span>
-        <div>
-          <span class="brand-title">HorasExtra<em>360</em></span>
-          <span class="brand-sub">Painel de Acompanhamento Gerencial</span>
+  <!-- ─── LOGIN SCREEN ─────────────────────────────────────────── -->
+  <section class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <div class="login-icon">🔐</div>
+      <h2>HorasExtra<em>360</em></h2>
+      <p class="login-sub">Faça login para acessar o painel gerencial</p>
+      
+      <form id="loginForm" class="login-form" onsubmit="return false;">
+        <div class="form-group">
+          <label for="loginEmail">E-mail</label>
+          <input type="email" id="loginEmail" placeholder="seu@email.com" required />
         </div>
-      </div>
-      <nav class="tab-nav">
-        <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-        <button class="tab-btn" data-tab="tabela">Tabela Analítica</button>
-        <button class="tab-btn" data-tab="alertas">Alertas</button>
-        <button class="tab-btn" data-tab="insights">Insights</button>
-      </nav>
-      <label class="upload-btn" for="fileInput">
-        <span>📂 Carregar Planilha</span>
-        <input type="file" id="fileInput" accept=".xlsx,.xls" hidden />
-      </label>
-    </div>
-  </header>
-
-  <!-- ─── PERIOD FILTER BAR ────────────────────────────────────── -->
-  <div class="filter-bar" id="filterBar" style="display:none">
-    <span class="filter-label">Período:</span>
-    <div id="dateChips" class="chip-group"></div>
-    <button class="chip chip-all active" id="chipAll">Todos</button>
-  </div>
-
-  <!-- ─── LANDING / UPLOAD PROMPT ─────────────────────────────── -->
-  <section class="landing" id="landing">
-    <div class="landing-card">
-      <div class="landing-icon">📊</div>
-      <h2>Bem-vindo ao HorasExtra360</h2>
-      <p>Faça o upload da planilha Excel com os dados de horas extras para começar.</p>
-      <label class="upload-btn-lg" for="fileInput">Selecionar arquivo .xlsx</label>
-      <p class="landing-hint">A planilha deve conter abas por data (ex.: 09-06, 10-06…)</p>
+        <div class="form-group">
+          <label for="loginPassword">Senha</label>
+          <input type="password" id="loginPassword" placeholder="••••••••" required />
+        </div>
+        <div class="login-error" id="loginError"></div>
+        <button type="submit" class="btn-login" id="btnLogin">Entrar</button>
+        <button type="button" class="btn-register" id="btnRegister">Criar conta</button>
+      </form>
+      
+      <p class="login-hint">Use seu e-mail corporativo para acesso.</p>
     </div>
   </section>
 
-  <!-- ─── MAIN CONTENT ─────────────────────────────────────────── -->
-  <main class="main-content" id="mainContent" style="display:none">
-
-    <!-- DASHBOARD TAB -->
-    <section class="tab-content active" id="tab-dashboard">
-
-      <!-- KPI Cards -->
-      <div class="kpi-grid">
-        <div class="kpi-card kpi-total">
-          <span class="kpi-label">Total HE do Período</span>
-          <span class="kpi-value" id="kpiTotalHE">—</span>
-          <span class="kpi-unit">horas</span>
+  <!-- ─── APP SHELL (visível apenas após login) ────────────────── -->
+  <div id="appShell" style="display:none">
+    <!-- ─── HEADER ─────────────────────────────────────────── -->
+    <header class="site-header">
+      <div class="header-inner">
+        <div class="brand">
+          <span class="brand-icon">⏱</span>
+          <div>
+            <span class="brand-title">HorasExtra<em>360</em></span>
+            <span class="brand-sub">Painel de Acompanhamento Gerencial</span>
+          </div>
         </div>
-        <div class="kpi-card kpi-colabs">
-          <span class="kpi-label">Colaboradores com HE</span>
-          <span class="kpi-value" id="kpiColabs">—</span>
-          <span class="kpi-unit">pessoas</span>
-        </div>
-        <div class="kpi-card kpi-media">
-          <span class="kpi-label">Média HE / Colaborador</span>
-          <span class="kpi-value" id="kpiMedia">—</span>
-          <span class="kpi-unit">horas</span>
-        </div>
-        <div class="kpi-card kpi-top">
-          <span class="kpi-label">Maior Volume</span>
-          <span class="kpi-value kpi-name" id="kpiTopName">—</span>
-          <span class="kpi-unit" id="kpiTopHours"></span>
-        </div>
-        <div class="kpi-card kpi-equipe">
-          <span class="kpi-label">Equipe Destaque</span>
-          <span class="kpi-value kpi-name" id="kpiEquipe">—</span>
-          <span class="kpi-unit" id="kpiEquipeHours"></span>
+        <nav class="tab-nav">
+          <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+          <button class="tab-btn" data-tab="tabela">Tabela Analítica</button>
+          <button class="tab-btn" data-tab="alertas">Alertas</button>
+          <button class="tab-btn" data-tab="insights">Insights</button>
+        </nav>
+        <div class="header-actions">
+          <span class="user-email" id="userEmail"></span>
+          <button class="btn-logout" id="btnLogout">Sair</button>
+          <label class="upload-btn" for="fileInput">
+            <span>📂 Carregar Planilha</span>
+            <input type="file" id="fileInput" accept=".xlsx,.xls" hidden />
+          </label>
         </div>
       </div>
+    </header>
 
-      <!-- Charts Row 1 -->
-      <div class="chart-grid two-col">
-        <div class="chart-card">
-          <h3 class="chart-title">Top 10 · Colaboradores</h3>
-          <div class="chart-wrap"><canvas id="chartTop10"></canvas></div>
-        </div>
-        <div class="chart-card">
-          <h3 class="chart-title">Horas Extras por Equipe</h3>
-          <div class="chart-wrap"><canvas id="chartEquipe"></canvas></div>
-        </div>
+    <!-- ─── PERIOD FILTER BAR ────────────────────────────── -->
+    <div class="filter-bar" id="filterBar" style="display:none">
+      <span class="filter-label">Período:</span>
+      <div id="dateChips" class="chip-group"></div>
+      <button class="chip chip-all active" id="chipAll">Todos</button>
+    </div>
+
+    <!-- ─── LANDING / UPLOAD PROMPT ─────────────────────── -->
+    <section class="landing" id="landing">
+      <div class="landing-card">
+        <div class="landing-icon">📊</div>
+        <h2>Bem-vindo ao HorasExtra360</h2>
+        <p>Faça o upload da planilha Excel com os dados de horas extras para começar.</p>
+        <label class="upload-btn-lg" for="fileInput">Selecionar arquivo .xlsx</label>
+        <p class="landing-hint">A planilha deve conter abas por data (ex.: 09-06, 10-06…)</p>
       </div>
+    </section>
 
-      <!-- Charts Row 2 -->
-      <div class="chart-grid three-col">
-        <div class="chart-card span-2">
-          <h3 class="chart-title">Evolução Diária das Horas Extras</h3>
-          <div class="chart-wrap"><canvas id="chartDiario"></canvas></div>
-        </div>
-        <div class="chart-card">
-          <h3 class="chart-title">Distribuição HE1 · HE2 · HE3 · HE4</h3>
-          <div class="chart-wrap chart-wrap-sm"><canvas id="chartPizza"></canvas></div>
-        </div>
-      </div>
+    <!-- ─── MAIN CONTENT ─────────────────────────────────── -->
+    <main class="main-content" id="mainContent" style="display:none">
 
-      <!-- Pontualidade Donut -->
-      <div class="chart-grid one-col">
-        <div class="chart-card donut-card">
-          <h3 class="chart-title">Pontualidade Média do Período</h3>
-          <div class="donut-wrap">
-            <canvas id="chartPontualidade"></canvas>
-            <div class="donut-center">
-              <span class="donut-pct" id="donutPct">—</span>
-              <span class="donut-lbl">pontual</span>
+      <!-- DASHBOARD TAB -->
+      <section class="tab-content active" id="tab-dashboard">
+
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card kpi-total">
+            <span class="kpi-label">Total HE do Período</span>
+            <span class="kpi-value" id="kpiTotalHE">—</span>
+            <span class="kpi-unit">horas</span>
+          </div>
+          <div class="kpi-card kpi-colabs">
+            <span class="kpi-label">Colaboradores com HE</span>
+            <span class="kpi-value" id="kpiColabs">—</span>
+            <span class="kpi-unit">pessoas</span>
+          </div>
+          <div class="kpi-card kpi-media">
+            <span class="kpi-label">Média HE / Colaborador</span>
+            <span class="kpi-value" id="kpiMedia">—</span>
+            <span class="kpi-unit">horas</span>
+          </div>
+          <div class="kpi-card kpi-top">
+            <span class="kpi-label">Maior Volume</span>
+            <span class="kpi-value kpi-name" id="kpiTopName">—</span>
+            <span class="kpi-unit" id="kpiTopHours"></span>
+          </div>
+          <div class="kpi-card kpi-equipe">
+            <span class="kpi-label">Equipe Destaque</span>
+            <span class="kpi-value kpi-name" id="kpiEquipe">—</span>
+            <span class="kpi-unit" id="kpiEquipeHours"></span>
+          </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="chart-grid two-col">
+          <div class="chart-card">
+            <h3 class="chart-title">Top 10 · Colaboradores</h3>
+            <div class="chart-wrap"><canvas id="chartTop10"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3 class="chart-title">Horas Extras por Equipe</h3>
+            <div class="chart-wrap"><canvas id="chartEquipe"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Charts Row 2 -->
+        <div class="chart-grid three-col">
+          <div class="chart-card span-2">
+            <h3 class="chart-title">Evolução Diária das Horas Extras</h3>
+            <div class="chart-wrap"><canvas id="chartDiario"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3 class="chart-title">Distribuição HE1 · HE2 · HE3 · HE4</h3>
+            <div class="chart-wrap chart-wrap-sm"><canvas id="chartPizza"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Pontualidade Donut -->
+        <div class="chart-grid one-col">
+          <div class="chart-card donut-card">
+            <h3 class="chart-title">Pontualidade Média do Período</h3>
+            <div class="donut-wrap">
+              <canvas id="chartPontualidade"></canvas>
+              <div class="donut-center">
+                <span class="donut-pct" id="donutPct">—</span>
+                <span class="donut-lbl">pontual</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-    </section>
+      </section>
 
-    <!-- TABELA ANALÍTICA TAB -->
-    <section class="tab-content" id="tab-tabela">
-      <div class="table-toolbar">
-        <input type="text" id="searchName" placeholder="🔍  Buscar por nome…" class="toolbar-input" />
-        <select id="filterEquipe" class="toolbar-select">
-          <option value="">Todas as equipes</option>
-        </select>
-        <select id="filterDate" class="toolbar-select">
-          <option value="">Todas as datas</option>
-        </select>
-        <div class="toolbar-actions">
-          <button class="btn-export" id="btnExportExcel">⬇ Excel</button>
-          <button class="btn-export" id="btnExportPDF">⬇ PDF</button>
+      <!-- TABELA ANALÍTICA TAB -->
+      <section class="tab-content" id="tab-tabela">
+        <div class="table-toolbar">
+          <input type="text" id="searchName" placeholder="🔍  Buscar por nome…" class="toolbar-input" />
+          <select id="filterEquipe" class="toolbar-select">
+            <option value="">Todas as equipes</option>
+          </select>
+          <select id="filterDate" class="toolbar-select">
+            <option value="">Todas as datas</option>
+          </select>
+          <div class="toolbar-actions">
+            <button class="btn-export" id="btnExportExcel">⬇ Excel</button>
+            <button class="btn-export" id="btnExportPDF">⬇ PDF</button>
+          </div>
         </div>
-      </div>
 
-      <div class="table-wrapper">
-        <table class="data-table" id="dataTable">
-          <thead>
-            <tr>
-              <th data-sort="nome">Nome <span class="sort-ico">⇅</span></th>
-              <th data-sort="cargo">Cargo <span class="sort-ico">⇅</span></th>
-              <th data-sort="equipe">Equipe <span class="sort-ico">⇅</span></th>
-              <th data-sort="data">Data <span class="sort-ico">⇅</span></th>
-              <th data-sort="he1">HE1 <span class="sort-ico">⇅</span></th>
-              <th data-sort="he2">HE2 <span class="sort-ico">⇅</span></th>
-              <th data-sort="he3">HE3 <span class="sort-ico">⇅</span></th>
-              <th data-sort="he4">HE4 <span class="sort-ico">⇅</span></th>
-              <th data-sort="totalHE">Total HE <span class="sort-ico">⇅</span></th>
-              <th data-sort="saldoFinal">Saldo Final <span class="sort-ico">⇅</span></th>
-            </tr>
-          </thead>
-          <tbody id="tableBody"></tbody>
-        </table>
-      </div>
-      <div class="table-footer">
-        <span id="tableCount">0 registros</span>
-        <div class="pagination" id="pagination"></div>
-      </div>
-    </section>
-
-    <!-- ALERTAS TAB -->
-    <section class="tab-content" id="tab-alertas">
-      <div class="alerts-header">
-        <h2>Alertas Inteligentes</h2>
-        <p>Colaboradores e equipes que requerem atenção gerencial.</p>
-      </div>
-      <div class="alerts-legend">
-        <span class="badge badge-green">● Normal</span>
-        <span class="badge badge-yellow">● Atenção  (&gt; 2h HE/dia)</span>
-        <span class="badge badge-red">● Excedente  (&gt; 10h HE acumulado)</span>
-      </div>
-
-      <div class="alerts-grid">
-        <div class="alert-panel">
-          <h3>🔴 Acima de 10h acumuladas</h3>
-          <ul id="alertAccum"></ul>
+        <div class="table-wrapper">
+          <table class="data-table" id="dataTable">
+            <thead>
+              <tr>
+                <th data-sort="nome">Nome <span class="sort-ico">⇅</span></th>
+                <th data-sort="cargo">Cargo <span class="sort-ico">⇅</span></th>
+                <th data-sort="equipe">Equipe <span class="sort-ico">⇅</span></th>
+                <th data-sort="data">Data <span class="sort-ico">⇅</span></th>
+                <th data-sort="he1">HE1 <span class="sort-ico">⇅</span></th>
+                <th data-sort="he2">HE2 <span class="sort-ico">⇅</span></th>
+                <th data-sort="he3">HE3 <span class="sort-ico">⇅</span></th>
+                <th data-sort="he4">HE4 <span class="sort-ico">⇅</span></th>
+                <th data-sort="totalHE">Total HE <span class="sort-ico">⇅</span></th>
+                <th data-sort="saldoFinal">Saldo Final <span class="sort-ico">⇅</span></th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
         </div>
-        <div class="alert-panel">
-          <h3>🟡 Mais de 2h HE em algum dia</h3>
-          <ul id="alertDaily"></ul>
+        <div class="table-footer">
+          <span id="tableCount">0 registros</span>
+          <div class="pagination" id="pagination"></div>
         </div>
-        <div class="alert-panel">
-          <h3>📈 Equipes acima da média</h3>
-          <ul id="alertEquipes"></ul>
+      </section>
+
+      <!-- ALERTAS TAB -->
+      <section class="tab-content" id="tab-alertas">
+        <div class="alerts-header">
+          <h2>Alertas Inteligentes</h2>
+          <p>Colaboradores e equipes que requerem atenção gerencial.</p>
         </div>
-      </div>
-    </section>
+        <div class="alerts-legend">
+          <span class="badge badge-green">● Normal</span>
+          <span class="badge badge-yellow">● Atenção  (&gt; 2h HE/dia)</span>
+          <span class="badge badge-red">● Excedente  (&gt; 10h HE acumulado)</span>
+        </div>
 
-    <!-- INSIGHTS TAB -->
-    <section class="tab-content" id="tab-insights">
-      <div class="insights-header">
-        <h2>Insights Estratégicos</h2>
-        <p>Análise automática dos dados do período.</p>
-      </div>
-      <div class="insights-list" id="insightsList"></div>
-    </section>
+        <div class="alerts-grid">
+          <div class="alert-panel">
+            <h3>🔴 Acima de 10h acumuladas</h3>
+            <ul id="alertAccum"></ul>
+          </div>
+          <div class="alert-panel">
+            <h3>🟡 Mais de 2h HE em algum dia</h3>
+            <ul id="alertDaily"></ul>
+          </div>
+          <div class="alert-panel">
+            <h3>📈 Equipes acima da média</h3>
+            <ul id="alertEquipes"></ul>
+          </div>
+        </div>
+      </section>
 
-  </main>
+      <!-- INSIGHTS TAB -->
+      <section class="tab-content" id="tab-insights">
+        <div class="insights-header">
+          <h2>Insights Estratégicos</h2>
+          <p>Análise automática dos dados do período.</p>
+        </div>
+        <div class="insights-list" id="insightsList"></div>
+      </section>
+
+    </main>
+  </div>
 
   <!-- Loading overlay -->
   <div class="loading-overlay" id="loadingOverlay" style="display:none">
@@ -217,6 +268,6 @@
     <p>Processando planilha…</p>
   </div>
 
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
