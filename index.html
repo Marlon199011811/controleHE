@@ -93,8 +93,34 @@
     <!-- ─── PERIOD FILTER BAR ────────────────────────────── -->
     <div class="filter-bar" id="filterBar" style="display:none">
       <span class="filter-label">Período:</span>
-      <div id="dateChips" class="chip-group"></div>
-      <button class="chip chip-all active" id="chipAll">Todos</button>
+
+      <!-- Calendar trigger button -->
+      <div class="cal-trigger-wrap">
+        <button class="cal-trigger-btn" id="calTriggerBtn">
+          <span class="cal-icon">📅</span>
+          <span id="calTriggerLabel">Todos os dias</span>
+          <span class="cal-arrow">▾</span>
+        </button>
+
+        <!-- Calendar dropdown -->
+        <div class="cal-dropdown" id="calDropdown" style="display:none">
+          <div class="cal-header">
+            <div class="cal-mode-switch">
+              <button class="cal-mode-btn active" id="calModeUnique" data-mode="unique">Dia único</button>
+              <button class="cal-mode-btn" id="calModeMulti" data-mode="multi">Múltiplos</button>
+            </div>
+          </div>
+          <div class="cal-grid" id="calGrid"></div>
+          <div class="cal-footer">
+            <button class="cal-foot-btn" id="calClearBtn">Limpar</button>
+            <button class="cal-foot-btn cal-foot-all" id="calAllBtn">Todos</button>
+            <button class="cal-foot-btn cal-foot-apply" id="calApplyBtn">Aplicar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Selected dates summary chips (read-only display) -->
+      <div id="selectedDatesSummary" class="selected-dates-summary"></div>
     </div>
 
     <!-- ─── LANDING / UPLOAD PROMPT ─────────────────────── -->
@@ -118,6 +144,22 @@
 
       <!-- DASHBOARD TAB -->
       <section class="tab-content active" id="tab-dashboard">
+
+        <!-- Dashboard Filters -->
+        <div class="dashboard-filters" id="dashboardFilters">
+          <div class="dash-filter-group">
+            <label class="dash-filter-label" for="filterColabDash">👤 Colaborador</label>
+            <div class="dash-filter-autocomplete">
+              <input type="text" id="filterColabDash" class="dash-filter-input" placeholder="Todos os colaboradores…" autocomplete="off" />
+              <ul class="dash-filter-dropdown" id="colabDropdownList"></ul>
+            </div>
+          </div>
+          <div class="dash-filter-active" id="dashActiveColab" style="display:none">
+            <span class="dash-active-label">Filtrando:</span>
+            <span class="dash-active-chip" id="dashActiveColabChip"></span>
+            <button class="dash-clear-btn" id="dashClearColab">✕</button>
+          </div>
+        </div>
 
         <!-- KPI Cards -->
         <div class="kpi-grid">

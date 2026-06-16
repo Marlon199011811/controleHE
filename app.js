@@ -23,8 +23,12 @@ import {
 ═══════════════════════════════════════════════════════════ */
 let allData      = [];
 let filteredData = [];
+let dashData     = [];   // filteredData further filtered by colabFilter
 let tableRows    = [];
 let activeDates  = new Set();
+let calMode      = 'unique';   // 'unique' | 'multi'
+let calSelected  = new Set();  // dates selected in the calendar (pending)
+let colabFilter  = '';         // colaborador selecionado no dashboard
 const charts = {};
 let tableSortCol = null;
 let tableSortAsc = true;
@@ -117,7 +121,6 @@ function initAuth() {
       loginScreen.style.display = 'none';
       appShell.style.display = 'block';
       userEmail.textContent = user.email;
-      // Tenta carregar do Firestore primeiro; se não houver, tenta auto-load local
       if (!allData.length) {
         loadFromFirestore().then(loaded => {
           if (!loaded) autoLoad();
@@ -131,7 +134,6 @@ function initAuth() {
     }
   });
 
-  // Login
   document.getElementById('btnLogin').addEventListener('click', async () => {
     const email = document.getElementById('loginEmail').value.trim();
     const pass  = document.getElementById('loginPassword').value;
@@ -143,12 +145,10 @@ function initAuth() {
     }
   });
 
-  // Enter no formulário também faz login
   document.getElementById('loginForm').addEventListener('keypress', e => {
     if (e.key === 'Enter') document.getElementById('btnLogin').click();
   });
 
-  // Registro
   document.getElementById('btnRegister').addEventListener('click', async () => {
     const email = document.getElementById('loginEmail').value.trim();
     const pass  = document.getElementById('loginPassword').value;
@@ -164,14 +164,15 @@ function initAuth() {
     }
   });
 
-  // Logout
   document.getElementById('btnLogout').addEventListener('click', async () => {
     await signOut(auth);
-    // Limpa dados para próximo login
     allData = [];
     filteredData = [];
+    dashData = [];
     tableRows = [];
     activeDates = new Set();
+    calSelected = new Set();
+    colabFilter = '';
     document.getElementById('landing').style.display = 'flex';
     document.getElementById('mainContent').style.display = 'none';
     document.getElementById('filterBar').style.display = 'none';
@@ -179,7 +180,6 @@ function initAuth() {
     for (const k in charts) delete charts[k];
   });
 
-  // Botões nuvem
   const btnSave = document.getElementById('btnSaveCloud');
   const btnLoad = document.getElementById('btnLoadCloud');
   if (btnSave) btnSave.addEventListener('click', saveToFirestore);
@@ -268,18 +268,18 @@ function parseWorkbook(wb) {
       const nome = String(row[map.nome] || '').trim();
       if (!nome || nome.toUpperCase() === 'TOTAIS') continue;
       const rec = {
-        data:          sheetName,
-        nome:          nome,
-        cargo:         map.cargo  !== undefined ? String(row[map.cargo]  || '').trim() : '—',
-        equipe:        map.equipe !== undefined ? String(row[map.equipe] || '').trim() : '—',
-        he1:           hhmm2dec(row[map.he1]),
-        he2:           hhmm2dec(row[map.he2]),
-        he3:           hhmm2dec(row[map.he3]),
-        he4:           hhmm2dec(row[map.he4]),
-        horasTotais:   hhmm2dec(row[map.horasTotais]),
-        saldoFinal:    hhmm2dec(row[map.saldoFinal]),
-        saldoInicial:  hhmm2dec(row[map.saldoInicial]),
-        pontualidade:  parseFloat(row[map.pontualidade]) || 0,
+        data:         sheetName,
+        nome:         nome,
+        cargo:        map.cargo  !== undefined ? String(row[map.cargo]  || '').trim() : '—',
+        equipe:       map.equipe !== undefined ? String(row[map.equipe] || '').trim() : '—',
+        he1:          hhmm2dec(row[map.he1]),
+        he2:          hhmm2dec(row[map.he2]),
+        he3:          hhmm2dec(row[map.he3]),
+        he4:          hhmm2dec(row[map.he4]),
+        horasTotais:  hhmm2dec(row[map.horasTotais]),
+        saldoFinal:   hhmm2dec(row[map.saldoFinal]),
+        saldoInicial: hhmm2dec(row[map.saldoInicial]),
+        pontualidade: parseFloat(row[map.pontualidade]) || 0,
       };
       rec.totalHE = R2(rec.he1 + rec.he2 + rec.he3 + rec.he4);
       records.push(rec);
@@ -306,7 +306,6 @@ document.getElementById('fileInput').addEventListener('change', e => {
         return;
       }
       initDashboard();
-      // Auto-salva no Firestore se usuário estiver logado
       if (currentUser) saveToFirestore();
     } catch (err) {
       alert('Erro ao ler planilha: ' + err.message);
@@ -325,62 +324,203 @@ document.getElementById('fileInput').addEventListener('change', e => {
 function initDashboard() {
   document.getElementById('landing').style.display = 'none';
   document.getElementById('mainContent').style.display = 'block';
-  buildDateChips();
+  buildCalendar();
   activeDates = new Set(allData.map(r => r.data));
+  calSelected = new Set(activeDates);
+  updateCalTriggerLabel();
+  document.getElementById('filterBar').style.display = 'flex';
+  buildColabAutocomplete();
   refreshAll();
   populateFilters();
 }
 
-function buildDateChips() {
-  const bar    = document.getElementById('filterBar');
-  const group  = document.getElementById('dateChips');
-  const dates  = [...new Set(allData.map(r => r.data))].sort();
-  group.innerHTML = '';
+/* ═══════════════════════════════════════════════════════════
+   CALENDÁRIO DE PERÍODO
+═══════════════════════════════════════════════════════════ */
+function buildCalendar() {
+  const dates = [...new Set(allData.map(r => r.data))].sort();
+
+  // Render calendar grid
+  renderCalGrid(dates);
+
+  // Mode switch buttons
+  document.getElementById('calModeUnique').addEventListener('click', () => {
+    calMode = 'unique';
+    document.getElementById('calModeUnique').classList.add('active');
+    document.getElementById('calModeMulti').classList.remove('active');
+  });
+  document.getElementById('calModeMulti').addEventListener('click', () => {
+    calMode = 'multi';
+    document.getElementById('calModeMulti').classList.add('active');
+    document.getElementById('calModeUnique').classList.remove('active');
+  });
+
+  // Toggle dropdown
+  document.getElementById('calTriggerBtn').addEventListener('click', e => {
+    e.stopPropagation();
+    const dd = document.getElementById('calDropdown');
+    dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+  });
+
+  // Close on outside click
+  document.addEventListener('click', e => {
+    const wrap = document.querySelector('.cal-trigger-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+      document.getElementById('calDropdown').style.display = 'none';
+    }
+  });
+
+  // Footer buttons
+  document.getElementById('calClearBtn').addEventListener('click', () => {
+    calSelected.clear();
+    renderCalGrid(dates);
+  });
+  document.getElementById('calAllBtn').addEventListener('click', () => {
+    calSelected = new Set(dates);
+    renderCalGrid(dates);
+  });
+  document.getElementById('calApplyBtn').addEventListener('click', () => {
+    activeDates = calSelected.size ? new Set(calSelected) : new Set(dates);
+    updateCalTriggerLabel();
+    updateSelectedSummary(dates);
+    document.getElementById('calDropdown').style.display = 'none';
+    refreshAll();
+  });
+}
+
+function renderCalGrid(dates) {
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '';
   dates.forEach(d => {
     const btn = document.createElement('button');
-    btn.className = 'chip active';
+    btn.className = 'cal-day' + (calSelected.has(d) ? ' selected' : '');
     btn.textContent = d;
-    btn.dataset.date = d;
-    btn.addEventListener('click', () => toggleDateChip(btn, d));
-    group.appendChild(btn);
+    btn.addEventListener('click', () => {
+      if (calMode === 'unique') {
+        calSelected.clear();
+        calSelected.add(d);
+        renderCalGrid(dates);
+      } else {
+        if (calSelected.has(d)) calSelected.delete(d);
+        else calSelected.add(d);
+        btn.classList.toggle('selected');
+      }
+    });
+    grid.appendChild(btn);
   });
-  document.getElementById('chipAll').addEventListener('click', selectAllDates);
-  bar.style.display = 'flex';
 }
 
-function toggleDateChip(btn, date) {
-  if (activeDates.has(date)) {
-    activeDates.delete(date);
-    btn.classList.remove('active');
+function updateCalTriggerLabel() {
+  const lbl = document.getElementById('calTriggerLabel');
+  const allDates = [...new Set(allData.map(r => r.data))];
+  if (activeDates.size === allDates.length) {
+    lbl.textContent = 'Todos os dias';
+  } else if (activeDates.size === 1) {
+    lbl.textContent = [...activeDates][0];
   } else {
-    activeDates.add(date);
-    btn.classList.add('active');
+    lbl.textContent = activeDates.size + ' dias selecionados';
   }
-  refreshAll();
 }
 
-function selectAllDates() {
-  const dates = [...new Set(allData.map(r => r.data))];
-  activeDates = new Set(dates);
-  document.querySelectorAll('#dateChips .chip').forEach(b => b.classList.add('active'));
-  refreshAll();
+function updateSelectedSummary(dates) {
+  const wrap = document.getElementById('selectedDatesSummary');
+  wrap.innerHTML = '';
+  if (activeDates.size === dates.length || activeDates.size === 0) return;
+  [...activeDates].sort().forEach(d => {
+    const chip = document.createElement('span');
+    chip.className = 'sum-chip';
+    chip.textContent = d;
+    wrap.appendChild(chip);
+  });
 }
 
+/* ═══════════════════════════════════════════════════════════
+   FILTRO DE COLABORADOR (DASHBOARD)
+═══════════════════════════════════════════════════════════ */
+function buildColabAutocomplete() {
+  const input    = document.getElementById('filterColabDash');
+  const list     = document.getElementById('colabDropdownList');
+  const activeWrap = document.getElementById('dashActiveColab');
+  const activeChip = document.getElementById('dashActiveColabChip');
+  const clearBtn   = document.getElementById('dashClearColab');
+
+  const names = [...new Set(allData.map(r => r.nome))].sort();
+
+  function showList(items) {
+    list.innerHTML = '';
+    items.slice(0, 10).forEach(name => {
+      const li = document.createElement('li');
+      li.textContent = name;
+      li.addEventListener('mousedown', e => {
+        e.preventDefault();
+        selectColab(name);
+      });
+      list.appendChild(li);
+    });
+    list.style.display = items.length ? 'block' : 'none';
+  }
+
+  function selectColab(name) {
+    colabFilter = name;
+    input.value = name;
+    list.style.display = 'none';
+    activeWrap.style.display = 'flex';
+    activeChip.textContent = name;
+    refreshDashboard();
+  }
+
+  function clearColab() {
+    colabFilter = '';
+    input.value = '';
+    activeWrap.style.display = 'none';
+    activeChip.textContent = '';
+    refreshDashboard();
+  }
+
+  input.addEventListener('input', () => {
+    const q = input.value.toLowerCase().trim();
+    if (!q) { list.style.display = 'none'; return; }
+    showList(names.filter(n => n.toLowerCase().includes(q)));
+  });
+
+  input.addEventListener('focus', () => {
+    if (input.value.trim()) {
+      showList(names.filter(n => n.toLowerCase().includes(input.value.toLowerCase())));
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => { list.style.display = 'none'; }, 150);
+  });
+
+  clearBtn.addEventListener('click', clearColab);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REFRESH
+═══════════════════════════════════════════════════════════ */
 function refreshAll() {
   filteredData = allData.filter(r => activeDates.has(r.data));
-  updateKPIs();
-  updateCharts();
+  refreshDashboard();
   applyTableFilters();
   updateAlerts();
   updateInsights();
+}
+
+function refreshDashboard() {
+  dashData = colabFilter
+    ? filteredData.filter(r => r.nome === colabFilter)
+    : filteredData;
+  updateKPIs();
+  updateCharts();
 }
 
 /* ═══════════════════════════════════════════════════════════
    KPI CARDS
 ═══════════════════════════════════════════════════════════ */
 function updateKPIs() {
-  const withHE = filteredData.filter(r => r.totalHE > 0);
-  const totalDec = filteredData.reduce((s, r) => s + r.totalHE, 0);
+  const withHE = dashData.filter(r => r.totalHE > 0);
+  const totalDec = dashData.reduce((s, r) => s + r.totalHE, 0);
   set('kpiTotalHE', dec2hhmm(totalDec));
   const uniqueColabs = new Set(withHE.map(r => r.nome)).size;
   set('kpiColabs', uniqueColabs);
@@ -393,6 +533,8 @@ function updateKPIs() {
   if (topEntry) {
     set('kpiTopName', shortName(topEntry[0]));
     set('kpiTopHours', dec2hhmm(topEntry[1]) + ' h');
+  } else {
+    set('kpiTopName', '—'); set('kpiTopHours', '');
   }
   const heByEquipe = {};
   withHE.filter(r => r.equipe && r.equipe !== '—').forEach(r => {
@@ -402,6 +544,8 @@ function updateKPIs() {
   if (topEquipe) {
     set('kpiEquipe', topEquipe[0]);
     set('kpiEquipeHours', dec2hhmm(topEquipe[1]) + ' h');
+  } else {
+    set('kpiEquipe', '—'); set('kpiEquipeHours', '');
   }
 }
 
@@ -458,7 +602,7 @@ function updateCharts() {
 
 function buildTop10Chart() {
   const heByColab = {};
-  filteredData.forEach(r => {
+  dashData.forEach(r => {
     if (r.totalHE > 0) heByColab[r.nome] = (heByColab[r.nome] || 0) + r.totalHE;
   });
   const top10 = Object.entries(heByColab).sort((a, b) => b[1] - a[1]).slice(0, 10);
@@ -488,7 +632,7 @@ function buildTop10Chart() {
 
 function buildEquipeChart() {
   const heByEquipe = {};
-  filteredData.filter(r => r.equipe && r.equipe !== '—').forEach(r => {
+  dashData.filter(r => r.equipe && r.equipe !== '—').forEach(r => {
     const eq = r.equipe.trim();
     heByEquipe[eq] = (heByEquipe[eq] || 0) + r.totalHE;
   });
@@ -523,9 +667,9 @@ function buildEquipeChart() {
 }
 
 function buildDiarioChart() {
-  const dates = [...new Set(filteredData.map(r => r.data))].sort();
+  const dates = [...new Set(dashData.map(r => r.data))].sort();
   const heByDate = {};
-  filteredData.forEach(r => { heByDate[r.data] = (heByDate[r.data] || 0) + r.totalHE; });
+  dashData.forEach(r => { heByDate[r.data] = (heByDate[r.data] || 0) + r.totalHE; });
   destroyChart('diario');
   const ctx = document.getElementById('chartDiario').getContext('2d');
   charts.diario = new Chart(ctx, {
@@ -556,7 +700,7 @@ function buildDiarioChart() {
 
 function buildPizzaChart() {
   const totals = [0, 0, 0, 0];
-  filteredData.forEach(r => {
+  dashData.forEach(r => {
     totals[0] += r.he1;
     totals[1] += r.he2;
     totals[2] += r.he3;
@@ -588,7 +732,7 @@ function buildPizzaChart() {
 }
 
 function buildPontualidadeChart() {
-  const withPont = filteredData.filter(r => r.pontualidade >= 0);
+  const withPont = dashData.filter(r => r.pontualidade >= 0);
   const avg = withPont.length
     ? withPont.reduce((s, r) => s + (r.pontualidade > 100 ? 100 : r.pontualidade), 0) / withPont.length
     : 0;
