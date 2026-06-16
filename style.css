@@ -217,6 +217,20 @@ body {
 .btn-save-cloud:hover { background: var(--green); border-color: var(--green); }
 .btn-load-cloud:hover { background: var(--blue); border-color: var(--blue); }
 
+/* ─── SHARED DATA BANNER ─────────────────────────────────── */
+.shared-banner {
+  background: rgba(30,136,229,.10);
+  border-bottom: 1px solid rgba(30,136,229,.25);
+  padding: .4rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .78rem;
+  color: var(--text-mid);
+}
+.shared-banner-icon { font-size: 1rem; }
+.shared-banner strong { color: var(--blue-glow); }
+
 /* ─── FILTER BAR ─────────────────────────────────────────── */
 .filter-bar {
   background: var(--navy-mid);

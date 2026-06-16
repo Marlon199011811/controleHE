@@ -90,6 +90,12 @@
       </div>
     </header>
 
+    <!-- ─── SHARED DATA BANNER ────────────────────────────── -->
+    <div class="shared-banner" id="sharedBanner" style="display:none">
+      <span class="shared-banner-icon">📡</span>
+      <span id="sharedBannerText"></span>
+    </div>
+
     <!-- ─── PERIOD FILTER BAR ────────────────────────────── -->
     <div class="filter-bar" id="filterBar" style="display:none">
       <span class="filter-label">Período:</span>
@@ -131,9 +137,10 @@
         <p>Faça o upload da planilha Excel com os dados de horas extras para começar.</p>
         <label class="upload-btn-lg" for="fileInput">Selecionar arquivo .xlsx</label>
         <p class="landing-hint">A planilha deve conter abas por data (ex.: 09-06, 10-06…)</p>
+        <p class="landing-hint" style="margin-top:.5rem;color:var(--blue-glow)">📡 Ao publicar, todos os usuários cadastrados verão os mesmos dados automaticamente.</p>
         <div class="landing-actions" style="margin-top:1rem;display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;">
-          <button class="btn-save-cloud" id="btnSaveCloud" style="display:none">☁️ Salvar dados na nuvem</button>
-          <button class="btn-load-cloud" id="btnLoadCloud" style="display:none">🔄 Carregar dados salvos</button>
+          <button class="btn-save-cloud" id="btnSaveCloud" style="display:none">☁️ Publicar dados para todos</button>
+          <button class="btn-load-cloud" id="btnLoadCloud" style="display:none">🔄 Carregar dados da nuvem</button>
         </div>
         <p id="cloudStatus" class="landing-hint" style="margin-top:.5rem;color:var(--green);"></p>
       </div>

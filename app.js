@@ -45,18 +45,22 @@ const db   = window.firebaseDB;
 /* ═══════════════════════════════════════════════════════════
    FIRESTORE: SALVAR & CARREGAR
 ═══════════════════════════════════════════════════════════ */
+// Shared Firestore path — all authenticated users read/write the same document
+const SHARED_REF = () => doc(db, 'shared', 'dashboard');
+
 async function saveToFirestore() {
   if (!currentUser || !allData.length) return;
   try {
     showLoading(true);
-    const ref = doc(db, 'users', currentUser.uid, 'dashboard', 'ultimo');
-    await setDoc(ref, {
+    await setDoc(SHARED_REF(), {
       records: allData,
       updatedAt: serverTimestamp(),
-      userEmail: currentUser.email,
+      savedByEmail: currentUser.email,
+      savedByUid: currentUser.uid,
       totalRecords: allData.length
     });
-    showCloudStatus('☁️ Dados salvos na nuvem com sucesso!', 'green');
+    showSharedBanner(currentUser.email);
+    showCloudStatus('☁️ Dados publicados na nuvem e disponíveis para todos os usuários!', 'green');
   } catch (err) {
     console.error('Erro ao salvar no Firestore:', err);
     showCloudStatus('⚠️ Erro ao salvar: ' + err.message, 'red');
@@ -69,14 +73,17 @@ async function loadFromFirestore() {
   if (!currentUser) return false;
   try {
     showLoading(true);
-    const ref = doc(db, 'users', currentUser.uid, 'dashboard', 'ultimo');
-    const snap = await getDoc(ref);
+    const snap = await getDoc(SHARED_REF());
     if (snap.exists()) {
       const payload = snap.data();
       if (payload.records && payload.records.length) {
         allData = payload.records;
         initDashboard();
-        showCloudStatus('☁️ Dados carregados da nuvem (' + payload.records.length + ' registros)', 'green');
+        showSharedBanner(payload.savedByEmail);
+        const savedBy = payload.savedByEmail || 'outro usuário';
+        const isSelf  = payload.savedByEmail === currentUser.email;
+        const who     = isSelf ? 'por você' : 'por ' + savedBy;
+        showCloudStatus('☁️ Dados carregados (' + payload.records.length + ' registros · enviados ' + who + ')', 'green');
         return true;
       }
     }
@@ -96,6 +103,18 @@ function showCloudStatus(msg, color) {
   el.textContent = msg;
   el.style.color = color === 'red' ? 'var(--red)' : 'var(--green)';
   setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 5000);
+}
+
+function showSharedBanner(savedByEmail) {
+  const banner = document.getElementById('sharedBanner');
+  const text   = document.getElementById('sharedBannerText');
+  if (!banner || !text) return;
+  if (!savedByEmail) { banner.style.display = 'none'; return; }
+  const isSelf = savedByEmail === (currentUser && currentUser.email);
+  text.innerHTML = isSelf
+    ? 'Dados publicados <strong>por você</strong> — visíveis para todos os usuários cadastrados.'
+    : 'Dados publicados por <strong>' + savedByEmail + '</strong> — compartilhados com todos os usuários.';
+  banner.style.display = 'flex';
 }
 
 function updateCloudButtons() {
@@ -176,6 +195,7 @@ function initAuth() {
     document.getElementById('landing').style.display = 'flex';
     document.getElementById('mainContent').style.display = 'none';
     document.getElementById('filterBar').style.display = 'none';
+    document.getElementById('sharedBanner').style.display = 'none';
     Object.values(charts).forEach(c => c.destroy && c.destroy());
     for (const k in charts) delete charts[k];
   });
