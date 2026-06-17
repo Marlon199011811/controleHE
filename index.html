@@ -155,16 +155,16 @@
         <!-- Dashboard Filters -->
         <div class="dashboard-filters" id="dashboardFilters">
           <div class="dash-filter-group">
-            <label class="dash-filter-label" for="filterColabDash">👤 Colaborador</label>
+            <label class="dash-filter-label" for="filterColabDash">👤 Colaboradores</label>
             <div class="dash-filter-autocomplete">
-              <input type="text" id="filterColabDash" class="dash-filter-input" placeholder="Todos os colaboradores…" autocomplete="off" />
+              <input type="text" id="filterColabDash" class="dash-filter-input" placeholder="Adicionar colaborador para comparar…" autocomplete="off" />
               <ul class="dash-filter-dropdown" id="colabDropdownList"></ul>
             </div>
           </div>
           <div class="dash-filter-active" id="dashActiveColab" style="display:none">
             <span class="dash-active-label">Filtrando:</span>
-            <span class="dash-active-chip" id="dashActiveColabChip"></span>
-            <button class="dash-clear-btn" id="dashClearColab">✕</button>
+            <div class="dash-active-chips" id="dashActiveColabChips"></div>
+            <button class="dash-clear-all-btn" id="dashClearColab">✕ Limpar</button>
           </div>
         </div>
 
@@ -200,7 +200,7 @@
         <!-- Charts Row 1 -->
         <div class="chart-grid two-col">
           <div class="chart-card">
-            <h3 class="chart-title">Top 10 · Colaboradores</h3>
+            <h3 class="chart-title" id="chartTitleTop10">Top 10 · Colaboradores</h3>
             <div class="chart-wrap"><canvas id="chartTop10"></canvas></div>
           </div>
           <div class="chart-card">
@@ -212,11 +212,11 @@
         <!-- Charts Row 2 -->
         <div class="chart-grid three-col">
           <div class="chart-card span-2">
-            <h3 class="chart-title">Evolução Diária das Horas Extras</h3>
+            <h3 class="chart-title" id="chartTitleDiario">Evolução Diária das Horas Extras</h3>
             <div class="chart-wrap"><canvas id="chartDiario"></canvas></div>
           </div>
           <div class="chart-card">
-            <h3 class="chart-title">Distribuição HE1 · HE2 · HE3 · HE4</h3>
+            <h3 class="chart-title" id="chartTitlePizza">Distribuição HE1 · HE2 · HE3 · HE4</h3>
             <div class="chart-wrap chart-wrap-sm"><canvas id="chartPizza"></canvas></div>
           </div>
         </div>
@@ -224,10 +224,10 @@
         <!-- Pontualidade Donut -->
         <div class="chart-grid one-col">
           <div class="chart-card donut-card">
-            <h3 class="chart-title">Pontualidade Média do Período</h3>
-            <div class="donut-wrap">
+            <h3 class="chart-title" id="chartTitlePont">Pontualidade Média do Período</h3>
+            <div class="donut-wrap" id="donutWrap">
               <canvas id="chartPontualidade"></canvas>
-              <div class="donut-center">
+              <div class="donut-center" id="donutCenter">
                 <span class="donut-pct" id="donutPct">—</span>
                 <span class="donut-lbl">pontual</span>
               </div>

@@ -28,7 +28,7 @@ let tableRows    = [];
 let activeDates  = new Set();
 let calMode      = 'unique';   // 'unique' | 'multi'
 let calSelected  = new Set();  // dates selected in the calendar (pending)
-let colabFilter  = '';         // colaborador selecionado no dashboard
+let colabFilters = new Set();  // colaboradores selecionados no dashboard (comparação)
 const charts = {};
 let tableSortCol = null;
 let tableSortAsc = true;
@@ -191,7 +191,7 @@ function initAuth() {
     tableRows = [];
     activeDates = new Set();
     calSelected = new Set();
-    colabFilter = '';
+    colabFilters = new Set();
     document.getElementById('landing').style.display = 'flex';
     document.getElementById('mainContent').style.display = 'none';
     document.getElementById('filterBar').style.display = 'none';
@@ -458,13 +458,17 @@ function updateSelectedSummary(dates) {
    FILTRO DE COLABORADOR (DASHBOARD)
 ═══════════════════════════════════════════════════════════ */
 function buildColabAutocomplete() {
-  const input    = document.getElementById('filterColabDash');
-  const list     = document.getElementById('colabDropdownList');
+  const input      = document.getElementById('filterColabDash');
+  const list       = document.getElementById('colabDropdownList');
   const activeWrap = document.getElementById('dashActiveColab');
-  const activeChip = document.getElementById('dashActiveColabChip');
+  const chipsWrap  = document.getElementById('dashActiveColabChips');
   const clearBtn   = document.getElementById('dashClearColab');
 
   const names = [...new Set(allData.map(r => r.nome))].sort();
+
+  function availableNames(q) {
+    return names.filter(n => !colabFilters.has(n) && n.toLowerCase().includes(q));
+  }
 
   function showList(items) {
     list.innerHTML = '';
@@ -473,39 +477,75 @@ function buildColabAutocomplete() {
       li.textContent = name;
       li.addEventListener('mousedown', e => {
         e.preventDefault();
-        selectColab(name);
+        addColab(name);
       });
       list.appendChild(li);
     });
     list.style.display = items.length ? 'block' : 'none';
   }
 
-  function selectColab(name) {
-    colabFilter = name;
-    input.value = name;
+  function renderChips() {
+    chipsWrap.innerHTML = '';
+    const compareMode = colabFilters.size > 1;
+    [...colabFilters].forEach((name, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'dash-active-chip';
+      if (compareMode) {
+        const color = PALETTE[i % PALETTE.length];
+        chip.style.borderColor = color;
+        chip.style.color = color;
+        chip.style.background = color + '22';
+      }
+      const label = document.createElement('span');
+      label.textContent = name;
+      chip.appendChild(label);
+      const rm = document.createElement('button');
+      rm.className = 'dash-chip-remove';
+      rm.textContent = '✕';
+      rm.title = 'Remover ' + name;
+      rm.addEventListener('click', () => removeColab(name));
+      chip.appendChild(rm);
+      chipsWrap.appendChild(chip);
+    });
+    activeWrap.style.display = colabFilters.size ? 'flex' : 'none';
+  }
+
+  function addColab(name) {
+    if (!names.includes(name) || colabFilters.has(name)) return;
+    colabFilters.add(name);
+    input.value = '';
     list.style.display = 'none';
-    activeWrap.style.display = 'flex';
-    activeChip.textContent = name;
+    renderChips();
     refreshDashboard();
   }
 
-  function clearColab() {
-    colabFilter = '';
-    input.value = '';
-    activeWrap.style.display = 'none';
-    activeChip.textContent = '';
+  function removeColab(name) {
+    colabFilters.delete(name);
+    renderChips();
+    refreshDashboard();
+  }
+
+  function clearAll() {
+    colabFilters.clear();
+    renderChips();
     refreshDashboard();
   }
 
   input.addEventListener('input', () => {
     const q = input.value.toLowerCase().trim();
-    if (!q) { list.style.display = 'none'; return; }
-    showList(names.filter(n => n.toLowerCase().includes(q)));
+    showList(availableNames(q));
   });
 
   input.addEventListener('focus', () => {
-    if (input.value.trim()) {
-      showList(names.filter(n => n.toLowerCase().includes(input.value.toLowerCase())));
+    const q = input.value.toLowerCase().trim();
+    showList(availableNames(q));
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const first = list.querySelector('li');
+      if (first) addColab(first.textContent);
     }
   });
 
@@ -513,7 +553,9 @@ function buildColabAutocomplete() {
     setTimeout(() => { list.style.display = 'none'; }, 150);
   });
 
-  clearBtn.addEventListener('click', clearColab);
+  clearBtn.addEventListener('click', clearAll);
+
+  renderChips();
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -528,11 +570,17 @@ function refreshAll() {
 }
 
 function refreshDashboard() {
-  dashData = colabFilter
-    ? filteredData.filter(r => r.nome === colabFilter)
+  dashData = colabFilters.size
+    ? filteredData.filter(r => colabFilters.has(r.nome))
     : filteredData;
   updateKPIs();
   updateCharts();
+}
+
+function getColabColorMap() {
+  const map = {};
+  [...colabFilters].forEach((name, i) => { map[name] = PALETTE[i % PALETTE.length]; });
+  return map;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -621,6 +669,8 @@ function updateCharts() {
 }
 
 function buildTop10Chart() {
+  const compareMode = colabFilters.size > 1;
+  const colorMap = getColabColorMap();
   const heByColab = {};
   dashData.forEach(r => {
     if (r.totalHE > 0) heByColab[r.nome] = (heByColab[r.nome] || 0) + r.totalHE;
@@ -628,6 +678,8 @@ function buildTop10Chart() {
   const top10 = Object.entries(heByColab).sort((a, b) => b[1] - a[1]).slice(0, 10);
   destroyChart('top10');
   const ctx = document.getElementById('chartTop10').getContext('2d');
+  const titleEl = document.getElementById('chartTitleTop10');
+  if (titleEl) titleEl.textContent = compareMode ? 'Comparativo · Colaboradores Selecionados' : 'Top 10 · Colaboradores';
   charts.top10 = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -635,7 +687,7 @@ function buildTop10Chart() {
       datasets: [{
         label: 'Total HE (h)',
         data: top10.map(([, v]) => R2(v)),
-        backgroundColor: PALETTE,
+        backgroundColor: compareMode ? top10.map(([n]) => colorMap[n] || C.blue) : PALETTE,
         borderRadius: 4,
       }],
     },
@@ -687,11 +739,52 @@ function buildEquipeChart() {
 }
 
 function buildDiarioChart() {
+  const compareMode = colabFilters.size > 1;
+  destroyChart('diario');
+  const ctx = document.getElementById('chartDiario').getContext('2d');
+  const titleEl = document.getElementById('chartTitleDiario');
+
+  if (compareMode) {
+    if (titleEl) titleEl.textContent = 'Evolução Diária · Comparativo entre Colaboradores';
+    const dates = [...new Set(filteredData.map(r => r.data))].sort();
+    const colorMap = getColabColorMap();
+    const datasets = [...colabFilters].map(name => {
+      const color = colorMap[name];
+      const byDate = {};
+      filteredData.filter(r => r.nome === name).forEach(r => {
+        byDate[r.data] = (byDate[r.data] || 0) + r.totalHE;
+      });
+      return {
+        label: shortName(name),
+        data: dates.map(d => R2(byDate[d] || 0)),
+        borderColor: color,
+        backgroundColor: color + '22',
+        fill: false,
+        tension: .35,
+        pointBackgroundColor: color,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      };
+    });
+    charts.diario = new Chart(ctx, {
+      type: 'line',
+      data: { labels: dates, datasets },
+      options: {
+        ...CHART_DEFAULTS,
+        plugins: {
+          ...CHART_DEFAULTS.plugins,
+          legend: { display: true, position: 'bottom', labels: { color: '#90a4ae', font: { size: 11 } } },
+          tooltip: { ...CHART_DEFAULTS.plugins.tooltip, callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ' + dec2hhmm(ctx.raw) } },
+        },
+      },
+    });
+    return;
+  }
+
+  if (titleEl) titleEl.textContent = 'Evolução Diária das Horas Extras';
   const dates = [...new Set(dashData.map(r => r.data))].sort();
   const heByDate = {};
   dashData.forEach(r => { heByDate[r.data] = (heByDate[r.data] || 0) + r.totalHE; });
-  destroyChart('diario');
-  const ctx = document.getElementById('chartDiario').getContext('2d');
   charts.diario = new Chart(ctx, {
     type: 'line',
     data: {
@@ -719,6 +812,41 @@ function buildDiarioChart() {
 }
 
 function buildPizzaChart() {
+  const compareMode = colabFilters.size > 1;
+  destroyChart('pizza');
+  const ctx = document.getElementById('chartPizza').getContext('2d');
+  const titleEl = document.getElementById('chartTitlePizza');
+
+  if (compareMode) {
+    if (titleEl) titleEl.textContent = 'HE1 · HE2 · HE3 · HE4 por Colaborador';
+    const colorMap = getColabColorMap();
+    const datasets = [...colabFilters].map(name => {
+      const rows = dashData.filter(r => r.nome === name);
+      const totals = [0, 0, 0, 0];
+      rows.forEach(r => { totals[0] += r.he1; totals[1] += r.he2; totals[2] += r.he3; totals[3] += r.he4; });
+      return {
+        label: shortName(name),
+        data: totals.map(R2),
+        backgroundColor: colorMap[name],
+        borderRadius: 4,
+      };
+    });
+    charts.pizza = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: ['HE1', 'HE2', 'HE3', 'HE4'], datasets },
+      options: {
+        ...CHART_DEFAULTS,
+        plugins: {
+          ...CHART_DEFAULTS.plugins,
+          legend: { display: true, position: 'bottom', labels: { color: '#90a4ae', font: { size: 11 } } },
+          tooltip: { ...CHART_DEFAULTS.plugins.tooltip, callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ' + dec2hhmm(ctx.raw) } },
+        },
+      },
+    });
+    return;
+  }
+
+  if (titleEl) titleEl.textContent = 'Distribuição HE1 · HE2 · HE3 · HE4';
   const totals = [0, 0, 0, 0];
   dashData.forEach(r => {
     totals[0] += r.he1;
@@ -726,8 +854,6 @@ function buildPizzaChart() {
     totals[2] += r.he3;
     totals[3] += r.he4;
   });
-  destroyChart('pizza');
-  const ctx = document.getElementById('chartPizza').getContext('2d');
   charts.pizza = new Chart(ctx, {
     type: 'doughnut',
     data: {
@@ -752,6 +878,57 @@ function buildPizzaChart() {
 }
 
 function buildPontualidadeChart() {
+  const compareMode = colabFilters.size > 1;
+  destroyChart('pont');
+  const ctx = document.getElementById('chartPontualidade').getContext('2d');
+  const titleEl    = document.getElementById('chartTitlePont');
+  const wrapEl     = document.getElementById('donutWrap');
+  const centerEl   = document.getElementById('donutCenter');
+
+  if (compareMode) {
+    if (titleEl) titleEl.textContent = 'Pontualidade por Colaborador';
+    if (wrapEl) wrapEl.classList.add('compare-mode');
+    if (centerEl) centerEl.style.display = 'none';
+    const colorMap = getColabColorMap();
+    const names = [...colabFilters];
+    const values = names.map(name => {
+      const rows = dashData.filter(r => r.nome === name && r.pontualidade >= 0);
+      const avg = rows.length
+        ? rows.reduce((s, r) => s + (r.pontualidade > 100 ? 100 : r.pontualidade), 0) / rows.length
+        : 0;
+      return R2(Math.min(avg, 100));
+    });
+    charts.pont = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: names.map(shortName),
+        datasets: [{
+          label: 'Pontualidade (%)',
+          data: values,
+          backgroundColor: names.map(n => colorMap[n]),
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        ...CHART_DEFAULTS,
+        indexAxis: 'y',
+        plugins: {
+          ...CHART_DEFAULTS.plugins,
+          legend: { display: false },
+          tooltip: { ...CHART_DEFAULTS.plugins.tooltip, callbacks: { label: ctx => ' ' + ctx.raw.toFixed(1) + '%' } },
+        },
+        scales: {
+          x: { ...CHART_DEFAULTS.scales.x, max: 100 },
+          y: { ...CHART_DEFAULTS.scales.y },
+        },
+      },
+    });
+    return;
+  }
+
+  if (titleEl) titleEl.textContent = 'Pontualidade Média do Período';
+  if (wrapEl) wrapEl.classList.remove('compare-mode');
+  if (centerEl) centerEl.style.display = 'flex';
   const withPont = dashData.filter(r => r.pontualidade >= 0);
   const avg = withPont.length
     ? withPont.reduce((s, r) => s + (r.pontualidade > 100 ? 100 : r.pontualidade), 0) / withPont.length
@@ -760,8 +937,6 @@ function buildPontualidadeChart() {
   const pctNorm = Math.min(pct, 100);
   document.getElementById('donutPct').textContent = pctNorm.toFixed(1) + '%';
   const color = pctNorm >= 90 ? C.green : pctNorm >= 70 ? C.amber : C.red;
-  destroyChart('pont');
-  const ctx = document.getElementById('chartPontualidade').getContext('2d');
   charts.pont = new Chart(ctx, {
     type: 'doughnut',
     data: {
