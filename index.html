@@ -8,6 +8,7 @@
   <!-- External libs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 
@@ -155,16 +156,16 @@
         <!-- Dashboard Filters -->
         <div class="dashboard-filters" id="dashboardFilters">
           <div class="dash-filter-group">
-            <label class="dash-filter-label" for="filterColabDash">👤 Colaborador</label>
+            <label class="dash-filter-label" for="filterColabDash">👤 Colaboradores</label>
             <div class="dash-filter-autocomplete">
-              <input type="text" id="filterColabDash" class="dash-filter-input" placeholder="Todos os colaboradores…" autocomplete="off" />
+              <input type="text" id="filterColabDash" class="dash-filter-input" placeholder="Adicionar colaborador para comparar…" autocomplete="off" />
               <ul class="dash-filter-dropdown" id="colabDropdownList"></ul>
             </div>
           </div>
           <div class="dash-filter-active" id="dashActiveColab" style="display:none">
-            <span class="dash-active-label">Filtrando:</span>
-            <span class="dash-active-chip" id="dashActiveColabChip"></span>
-            <button class="dash-clear-btn" id="dashClearColab">✕</button>
+            <span class="dash-active-label" id="dashActiveColabLabel">Filtrando:</span>
+            <div class="dash-chips-wrap" id="dashChipsWrap"></div>
+            <button class="dash-clear-btn" id="dashClearColab" title="Limpar todos">✕ Limpar</button>
           </div>
         </div>
 

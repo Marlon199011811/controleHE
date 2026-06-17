@@ -28,7 +28,7 @@ let tableRows    = [];
 let activeDates  = new Set();
 let calMode      = 'unique';   // 'unique' | 'multi'
 let calSelected  = new Set();  // dates selected in the calendar (pending)
-let colabFilter  = '';         // colaborador selecionado no dashboard
+let colabFilters = new Set();  // colaboradores selecionados no dashboard (comparação)
 const charts = {};
 let tableSortCol = null;
 let tableSortAsc = true;
@@ -191,7 +191,8 @@ function initAuth() {
     tableRows = [];
     activeDates = new Set();
     calSelected = new Set();
-    colabFilter = '';
+    colabFilters.clear();
+    renderColabChips();
     document.getElementById('landing').style.display = 'flex';
     document.getElementById('mainContent').style.display = 'none';
     document.getElementById('filterBar').style.display = 'none';
@@ -357,11 +358,21 @@ function initDashboard() {
 /* ═══════════════════════════════════════════════════════════
    CALENDÁRIO DE PERÍODO
 ═══════════════════════════════════════════════════════════ */
-function buildCalendar() {
-  const dates = [...new Set(allData.map(r => r.data))].sort();
+let calDates = [];               // datas disponíveis (atualizado a cada carga de dados)
+let calListenersBound = false;   // garante que os listeners do calendário sejam ligados só 1x
 
-  // Render calendar grid
-  renderCalGrid(dates);
+function buildCalendar() {
+  calDates = [...new Set(allData.map(r => r.data))].sort();
+
+  // Sempre redesenha a grade com as datas atuais
+  renderCalGrid(calDates);
+
+  // Os listeners de controle (modo, abrir/fechar, limpar, aplicar) só precisam
+  // ser ligados uma única vez. Religá-los a cada carga de planilha duplicava
+  // os handlers e fazia o seletor "travar" (o toggle de abrir/fechar passava
+  // a cancelar a si mesmo quando havia 2 listeners no mesmo botão).
+  if (calListenersBound) return;
+  calListenersBound = true;
 
   // Mode switch buttons
   document.getElementById('calModeUnique').addEventListener('click', () => {
@@ -393,16 +404,16 @@ function buildCalendar() {
   // Footer buttons
   document.getElementById('calClearBtn').addEventListener('click', () => {
     calSelected.clear();
-    renderCalGrid(dates);
+    renderCalGrid(calDates);
   });
   document.getElementById('calAllBtn').addEventListener('click', () => {
-    calSelected = new Set(dates);
-    renderCalGrid(dates);
+    calSelected = new Set(calDates);
+    renderCalGrid(calDates);
   });
   document.getElementById('calApplyBtn').addEventListener('click', () => {
-    activeDates = calSelected.size ? new Set(calSelected) : new Set(dates);
+    activeDates = calSelected.size ? new Set(calSelected) : new Set(calDates);
     updateCalTriggerLabel();
-    updateSelectedSummary(dates);
+    updateSelectedSummary(calDates);
     document.getElementById('calDropdown').style.display = 'none';
     refreshAll();
   });
@@ -415,7 +426,13 @@ function renderCalGrid(dates) {
     const btn = document.createElement('button');
     btn.className = 'cal-day' + (calSelected.has(d) ? ' selected' : '');
     btn.textContent = d;
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', e => {
+      // Impede que o clique "borbulhe" até o listener de fechamento (clique
+      // fora). Sem isso, o próprio botão é removido do DOM pelo re-render
+      // abaixo antes do evento terminar de se propagar, e o listener de
+      // "clique fora" interpreta isso como um clique fora do calendário,
+      // fechando o dropdown em vez de aguardar o botão "Aplicar".
+      e.stopPropagation();
       if (calMode === 'unique') {
         calSelected.clear();
         calSelected.add(d);
@@ -457,55 +474,47 @@ function updateSelectedSummary(dates) {
 /* ═══════════════════════════════════════════════════════════
    FILTRO DE COLABORADOR (DASHBOARD)
 ═══════════════════════════════════════════════════════════ */
+let colabNames = [];               // nomes disponíveis (atualizado a cada carga de dados)
+let colabListenersBound = false;   // mesma proteção contra listeners duplicados do calendário
+
 function buildColabAutocomplete() {
+  colabNames = [...new Set(allData.map(r => r.nome))].sort();
+  renderColabChips();
+
+  if (colabListenersBound) return;
+  colabListenersBound = true;
+
   const input    = document.getElementById('filterColabDash');
   const list     = document.getElementById('colabDropdownList');
-  const activeWrap = document.getElementById('dashActiveColab');
-  const activeChip = document.getElementById('dashActiveColabChip');
-  const clearBtn   = document.getElementById('dashClearColab');
-
-  const names = [...new Set(allData.map(r => r.nome))].sort();
+  const clearBtn = document.getElementById('dashClearColab');
 
   function showList(items) {
     list.innerHTML = '';
-    items.slice(0, 10).forEach(name => {
+    const avail = items.filter(n => !colabFilters.has(n));
+    avail.slice(0, 10).forEach(name => {
       const li = document.createElement('li');
       li.textContent = name;
       li.addEventListener('mousedown', e => {
         e.preventDefault();
         selectColab(name);
+        input.value = '';
+        list.style.display = 'none';
+        input.focus();
       });
       list.appendChild(li);
     });
-    list.style.display = items.length ? 'block' : 'none';
-  }
-
-  function selectColab(name) {
-    colabFilter = name;
-    input.value = name;
-    list.style.display = 'none';
-    activeWrap.style.display = 'flex';
-    activeChip.textContent = name;
-    refreshDashboard();
-  }
-
-  function clearColab() {
-    colabFilter = '';
-    input.value = '';
-    activeWrap.style.display = 'none';
-    activeChip.textContent = '';
-    refreshDashboard();
+    list.style.display = avail.length ? 'block' : 'none';
   }
 
   input.addEventListener('input', () => {
     const q = input.value.toLowerCase().trim();
     if (!q) { list.style.display = 'none'; return; }
-    showList(names.filter(n => n.toLowerCase().includes(q)));
+    showList(colabNames.filter(n => n.toLowerCase().includes(q)));
   });
 
   input.addEventListener('focus', () => {
     if (input.value.trim()) {
-      showList(names.filter(n => n.toLowerCase().includes(input.value.toLowerCase())));
+      showList(colabNames.filter(n => n.toLowerCase().includes(input.value.toLowerCase())));
     }
   });
 
@@ -513,7 +522,59 @@ function buildColabAutocomplete() {
     setTimeout(() => { list.style.display = 'none'; }, 150);
   });
 
-  clearBtn.addEventListener('click', clearColab);
+  clearBtn.addEventListener('click', clearAllColabs);
+}
+
+function selectColab(name) {
+  colabFilters.add(name);
+  renderColabChips();
+  refreshDashboard();
+}
+
+function removeColab(name) {
+  colabFilters.delete(name);
+  renderColabChips();
+  refreshDashboard();
+}
+
+function clearAllColabs() {
+  colabFilters.clear();
+  renderColabChips();
+  refreshDashboard();
+}
+
+function renderColabChips() {
+  const activeWrap = document.getElementById('dashActiveColab');
+  const chipsWrap   = document.getElementById('dashChipsWrap');
+  const label       = document.getElementById('dashActiveColabLabel');
+  if (!activeWrap || !chipsWrap) return;
+
+  chipsWrap.innerHTML = '';
+  if (!colabFilters.size) {
+    activeWrap.style.display = 'none';
+    return;
+  }
+  activeWrap.style.display = 'flex';
+  if (label) label.textContent = colabFilters.size > 1 ? 'Comparando:' : 'Filtrando:';
+
+  [...colabFilters].forEach(name => {
+    const chip = document.createElement('span');
+    chip.className = 'dash-active-chip';
+
+    const text = document.createElement('span');
+    text.className = 'dash-chip-text';
+    text.textContent = shortName(name);
+    chip.appendChild(text);
+
+    const rm = document.createElement('button');
+    rm.className = 'dash-chip-remove';
+    rm.textContent = '✕';
+    rm.title = 'Remover ' + name;
+    rm.addEventListener('click', () => removeColab(name));
+    chip.appendChild(rm);
+
+    chipsWrap.appendChild(chip);
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -528,8 +589,8 @@ function refreshAll() {
 }
 
 function refreshDashboard() {
-  dashData = colabFilter
-    ? filteredData.filter(r => r.nome === colabFilter)
+  dashData = colabFilters.size
+    ? filteredData.filter(r => colabFilters.has(r.nome))
     : filteredData;
   updateKPIs();
   updateCharts();
@@ -595,6 +656,14 @@ const C = {
 };
 const PALETTE = [C.blue, C.green, C.amber, C.red, C.purple, C.teal, C.lime, C.orange];
 
+// Liga o plugin de rótulos de valor (chartjs-plugin-datalabels) globalmente.
+// Cada gráfico abaixo define sua própria configuração de "datalabels" para
+// mostrar o valor (em horas ou %) diretamente sobre barras, pontos e fatias.
+if (window.Chart && window.ChartDataLabels) {
+  Chart.register(ChartDataLabels);
+}
+const DATALABEL_COLOR = '#e8f0fe';
+
 const CHART_DEFAULTS = {
   responsive: true,
   maintainAspectRatio: false,
@@ -641,10 +710,19 @@ function buildTop10Chart() {
     },
     options: {
       ...CHART_DEFAULTS,
+      layout: { padding: { top: 24 } },
       plugins: {
         ...CHART_DEFAULTS.plugins,
         legend: { display: false },
         tooltip: { ...CHART_DEFAULTS.plugins.tooltip, callbacks: { label: ctx => ' ' + dec2hhmm(ctx.raw) } },
+        datalabels: {
+          color: DATALABEL_COLOR,
+          anchor: 'end',
+          align: 'end',
+          offset: 2,
+          font: { size: 10, weight: '600' },
+          formatter: v => v > 0 ? dec2hhmm(v) : '',
+        },
       },
     },
   });
@@ -673,10 +751,19 @@ function buildEquipeChart() {
     options: {
       ...CHART_DEFAULTS,
       indexAxis: 'y',
+      layout: { padding: { right: 44 } },
       plugins: {
         ...CHART_DEFAULTS.plugins,
         legend: { display: false },
         tooltip: { ...CHART_DEFAULTS.plugins.tooltip, callbacks: { label: ctx => ' ' + dec2hhmm(ctx.raw) } },
+        datalabels: {
+          color: DATALABEL_COLOR,
+          anchor: 'end',
+          align: 'end',
+          offset: 4,
+          font: { size: 10, weight: '600' },
+          formatter: v => v > 0 ? dec2hhmm(v) : '',
+        },
       },
       scales: {
         x: { ...CHART_DEFAULTS.scales.x },
@@ -688,31 +775,64 @@ function buildEquipeChart() {
 
 function buildDiarioChart() {
   const dates = [...new Set(dashData.map(r => r.data))].sort();
-  const heByDate = {};
-  dashData.forEach(r => { heByDate[r.data] = (heByDate[r.data] || 0) + r.totalHE; });
   destroyChart('diario');
   const ctx = document.getElementById('chartDiario').getContext('2d');
+
+  let datasets;
+  const comparing = colabFilters.size > 0;
+
+  if (comparing) {
+    // Modo comparativo: uma linha por colaborador selecionado
+    datasets = [...colabFilters].map((nome, i) => {
+      const byDate = {};
+      dashData.filter(r => r.nome === nome).forEach(r => {
+        byDate[r.data] = (byDate[r.data] || 0) + r.totalHE;
+      });
+      const color = PALETTE[i % PALETTE.length];
+      return {
+        label: shortName(nome),
+        data: dates.map(d => R2(byDate[d] || 0)),
+        borderColor: color,
+        backgroundColor: color,
+        fill: false,
+        tension: .35,
+        pointBackgroundColor: color,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      };
+    });
+  } else {
+    const heByDate = {};
+    dashData.forEach(r => { heByDate[r.data] = (heByDate[r.data] || 0) + r.totalHE; });
+    datasets = [{
+      label: 'Total HE do dia',
+      data: dates.map(d => R2(heByDate[d] || 0)),
+      borderColor: C.blue,
+      backgroundColor: 'rgba(30,136,229,.15)',
+      fill: true,
+      tension: .35,
+      pointBackgroundColor: C.blue,
+      pointRadius: 5,
+      pointHoverRadius: 7,
+    }];
+  }
+
   charts.diario = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels: dates,
-      datasets: [{
-        label: 'Total HE do dia',
-        data: dates.map(d => R2(heByDate[d] || 0)),
-        borderColor: C.blue,
-        backgroundColor: 'rgba(30,136,229,.15)',
-        fill: true,
-        tension: .35,
-        pointBackgroundColor: C.blue,
-        pointRadius: 5,
-        pointHoverRadius: 7,
-      }],
-    },
+    data: { labels: dates, datasets },
     options: {
       ...CHART_DEFAULTS,
       plugins: {
         ...CHART_DEFAULTS.plugins,
-        tooltip: { ...CHART_DEFAULTS.plugins.tooltip, callbacks: { label: ctx => ' ' + dec2hhmm(ctx.raw) } },
+        legend: { display: comparing, labels: CHART_DEFAULTS.plugins.legend.labels },
+        tooltip: { ...CHART_DEFAULTS.plugins.tooltip, callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ' + dec2hhmm(ctx.raw) } },
+        datalabels: {
+          color: DATALABEL_COLOR,
+          align: 'top',
+          offset: 4,
+          font: { size: 9, weight: '600' },
+          formatter: v => v > 0 ? dec2hhmm(v) : '',
+        },
       },
     },
   });
@@ -746,6 +866,11 @@ function buildPizzaChart() {
       plugins: {
         legend: { position: 'bottom', labels: { color: '#90a4ae', font: { size: 11 }, padding: 12 } },
         tooltip: { ...CHART_DEFAULTS.plugins.tooltip, callbacks: { label: ctx => ' ' + ctx.label + ': ' + dec2hhmm(ctx.raw) } },
+        datalabels: {
+          color: '#fff',
+          font: { size: 11, weight: '700' },
+          formatter: v => v > 0 ? dec2hhmm(v) : '',
+        },
       },
     },
   });
@@ -780,6 +905,11 @@ function buildPontualidadeChart() {
       plugins: {
         legend: { display: false },
         tooltip: { ...CHART_DEFAULTS.plugins.tooltip, callbacks: { label: ctx => ' ' + ctx.label + ': ' + ctx.raw.toFixed(1) + '%' } },
+        datalabels: {
+          color: '#fff',
+          font: { size: 12, weight: '700' },
+          formatter: v => v > 3 ? v.toFixed(1) + '%' : '',
+        },
       },
     },
   });
